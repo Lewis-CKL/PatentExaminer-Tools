@@ -348,6 +348,39 @@ function isTranslationFile(filename) {
 }
 
 
+/*
+    Extract an explicit prior-art D-number from the filename.
+
+    Supported forms include:
+      D1-CN101960865A.pdf   -> D1
+      ODD1 ...              -> D1
+      OSD2 ...              -> D2
+
+    ODDn / OSDn are treated as numbering hints only; those files are
+    still renamed into the normal Dn-[App No.] format.
+*/
+function extractExplicitDNumber(filename) {
+
+    // A file already in the final Dn-... form.
+    const finalNameMatch =
+        filename.match(/^D(\d+)-/i);
+
+    if (finalNameMatch) {
+        return parseInt(finalNameMatch[1], 10);
+    }
+
+    // Legacy/source labels such as ODD1 and OSD2 anywhere in the filename.
+    const legacyMatch =
+        filename.match(/(?:^|[^A-Z0-9])(?:ODD|OSD)\s*[-_.]?\s*(\d+)(?=$|[^A-Z0-9])/i);
+
+    if (legacyMatch) {
+        return parseInt(legacyMatch[1], 10);
+    }
+
+    return null;
+}
+
+
 async function selectFolder() {
 
     if (!("showDirectoryPicker" in window)) {
@@ -463,17 +496,15 @@ async function buildRenamePlan() {
         const translation =
             isTranslationFile(fileHandle.name);
 
-        const existingMatch =
-            fileHandle.name.match(/^D(\d+)-/i);
+        const explicitD =
+            extractExplicitDNumber(fileHandle.name);
 
         candidates.push({
             handle: fileHandle,
             oldName: fileHandle.name,
             patentNumber: patentNumber,
             translation: translation,
-            existingD: existingMatch
-                ? parseInt(existingMatch[1], 10)
-                : null
+            existingD: explicitD
         });
     }
 
@@ -488,6 +519,9 @@ async function buildRenamePlan() {
 
         If an already-renamed file exists, preserve its D-number and use
         that same number for an unrenamed translation/original counterpart.
+
+        Legacy labels ODDn and OSDn are also treated as explicit D-number
+        hints (e.g. ODD1 -> D1, OSD2 -> D2).
     */
     const patentToD = new Map();
     const usedDNumbers = new Set();
