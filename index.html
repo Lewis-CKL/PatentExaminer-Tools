@@ -427,15 +427,8 @@ async function buildRenamePlan() {
         // Files containing the marker "filewrapper" are intentionally ignored.
         // They are not renamed and do not consume a D-number.
         if (await containsFileWrapper(fileHandle)) {
-
-            renamePlan.push({
-                handle: fileHandle,
-                oldName: fileHandle.name,
-                newName: "",
-                valid: false,
-                status: "Skipped: contains filewrapper"
-            });
-
+            // Completely exclude FileWrapper PDFs from prior-art detection.
+            // They do not appear in the preview and do not consume a D-number.
             continue;
         }
 
@@ -495,7 +488,7 @@ async function buildRenamePlan() {
         !renamePlan.some(x => x.valid);
 
     document.getElementById("status").innerHTML =
-        `${files.length} PDF file(s) found. Review the preview before renaming.`;
+        `${renamePlan.length} potential prior art PDF file(s) detected. Review the preview before renaming.`;
 }
 
 
