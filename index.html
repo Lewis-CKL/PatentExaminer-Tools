@@ -331,6 +331,23 @@ function extractPatentNumber(filename) {
 }
 
 
+/*
+    Detect a translated prior-art copy from its filename.
+
+    Examples:
+    Translation-of-CN101960865A.pdf
+    trans-CN101960865A.pdf
+    translated_CN101960865A.pdf
+
+    "trans" must appear as a separate filename token, so words such
+    as "transaction" will not be treated as translations.
+*/
+function isTranslationFile(filename) {
+    const stem = filename.replace(/\.[^.]+$/, "");
+    return /(?:^|[\s._-])(trans|translation|translated)(?=$|[\s._-])/i.test(stem);
+}
+
+
 async function selectFolder() {
 
     if (!("showDirectoryPicker" in window)) {
@@ -395,16 +412,7 @@ async function buildRenamePlan() {
         }
     }
 
-    /*
-        Alphabetical / natural ordering.
-
-        Example:
-        (1....)
-        (2....)
-        (10....)
-
-        will sort naturally rather than 1,10,2.
-    */
+    // Natural filename ordering.
     files.sort((a, b) =>
         a.name.localeCompare(
             b.name,
@@ -416,19 +424,23 @@ async function buildRenamePlan() {
         )
     );
 
-    let dNumber =
+    const startNumber =
         parseInt(
             document.getElementById("startNumber").value,
             10
         ) || 1;
 
+    /*
+        First collect only genuine prior-art candidates.
+
+        A PDF whose CONTENT contains "filewrapper" is completely ignored:
+        it is not shown, not counted, and does not consume a D-number.
+    */
+    const candidates = [];
+
     for (const fileHandle of files) {
 
-        // Files containing the marker "filewrapper" are intentionally ignored.
-        // They are not renamed and do not consume a D-number.
         if (await containsFileWrapper(fileHandle)) {
-            // Completely exclude FileWrapper PDFs from prior-art detection.
-            // They do not appear in the preview and do not consume a D-number.
             continue;
         }
 
@@ -448,38 +460,145 @@ async function buildRenamePlan() {
             continue;
         }
 
-        /*
-            If it is already named D<number>-..., leave it alone
-            but still display it.
-        */
+        const translation =
+            isTranslationFile(fileHandle.name);
+
+        const existingMatch =
+            fileHandle.name.match(/^D(\d+)-/i);
+
+        candidates.push({
+            handle: fileHandle,
+            oldName: fileHandle.name,
+            patentNumber: patentNumber,
+            translation: translation,
+            existingD: existingMatch
+                ? parseInt(existingMatch[1], 10)
+                : null
+        });
+    }
+
+    /*
+        Patent/application number is the identity of the prior art.
+
+        Therefore:
+        CN101960865A
+        Translation-of-CN101960865A
+
+        both receive the SAME D-number.
+
+        If an already-renamed file exists, preserve its D-number and use
+        that same number for an unrenamed translation/original counterpart.
+    */
+    const patentToD = new Map();
+    const usedDNumbers = new Set();
+
+    for (const item of candidates) {
+
+        if (
+            item.existingD !== null &&
+            !patentToD.has(item.patentNumber)
+        ) {
+            patentToD.set(
+                item.patentNumber,
+                item.existingD
+            );
+
+            usedDNumbers.add(item.existingD);
+        }
+    }
+
+    let nextD = startNumber;
+
+    function nextAvailableD() {
+
+        while (usedDNumbers.has(nextD)) {
+            nextD++;
+        }
+
+        const result = nextD;
+        usedDNumbers.add(result);
+        nextD++;
+
+        return result;
+    }
+
+    for (const item of candidates) {
+
+        if (!patentToD.has(item.patentNumber)) {
+            patentToD.set(
+                item.patentNumber,
+                nextAvailableD()
+            );
+        }
+    }
+
+    /*
+        Build the preview.
+
+        Original:
+            D1-CN101960865A.pdf
+
+        Translation:
+            D1-CN101960865A-EN.pdf
+    */
+    const plannedTargets = new Set();
+
+    for (const item of candidates) {
+
+        const dNumber =
+            patentToD.get(item.patentNumber);
+
+        const newName =
+            `D${dNumber}-${item.patentNumber}` +
+            `${item.translation ? "-EN" : ""}.pdf`;
+
         const alreadyRenamed =
-            /^D\d+-/i.test(fileHandle.name);
+            /^D\d+-/i.test(item.oldName);
 
         if (alreadyRenamed) {
 
             renamePlan.push({
-                handle: fileHandle,
-                oldName: fileHandle.name,
-                newName: fileHandle.name,
+                handle: item.handle,
+                oldName: item.oldName,
+                newName: item.oldName,
                 valid: false,
                 status: "Already renamed"
+            });
+
+            plannedTargets.add(
+                item.oldName.toLowerCase()
+            );
+
+            continue;
+        }
+
+        const targetKey =
+            newName.toLowerCase();
+
+        if (plannedTargets.has(targetKey)) {
+
+            renamePlan.push({
+                handle: item.handle,
+                oldName: item.oldName,
+                newName: newName,
+                valid: false,
+                status: "Duplicate copy of same prior art"
             });
 
             continue;
         }
 
-        const newName =
-            `D${dNumber}-${patentNumber}.pdf`;
+        plannedTargets.add(targetKey);
 
         renamePlan.push({
-            handle: fileHandle,
-            oldName: fileHandle.name,
+            handle: item.handle,
+            oldName: item.oldName,
             newName: newName,
             valid: true,
-            status: "Ready"
+            status: item.translation
+                ? `Ready — translation shares D${dNumber}`
+                : "Ready"
         });
-
-        dNumber++;
     }
 
     renderPreview();
@@ -487,10 +606,13 @@ async function buildRenamePlan() {
     document.getElementById("renameButton").disabled =
         !renamePlan.some(x => x.valid);
 
-    document.getElementById("status").innerHTML =
-        `${renamePlan.length} potential prior art PDF file(s) detected. Review the preview before renaming.`;
-}
+    const uniquePriorArt =
+        new Set(candidates.map(x => x.patentNumber)).size;
 
+    document.getElementById("status").innerHTML =
+        `${candidates.length} prior-art PDF file(s) detected, representing ` +
+        `${uniquePriorArt} unique prior-art document(s). Review the preview before renaming.`;
+}
 
 function renderPreview() {
 
