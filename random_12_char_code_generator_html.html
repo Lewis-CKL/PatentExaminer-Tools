@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Random 12 Character Code Generator</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --outline: #cbd5e1;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 460px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 24px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      line-height: 1.2;
+    }
+
+    p { margin: 0; color: var(--muted); }
+
+    .code-box {
+      margin: 24px 0 18px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: #fff;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .code {
+      font-family: Consolas, Monaco, monospace;
+      font-size: 28px;
+      letter-spacing: 0.22em;
+      word-break: break-all;
+      margin: 0;
+    }
+
+    .meta {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    button {
+      border: none;
+      border-radius: 16px;
+      height: 46px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.05s ease, background 0.2s ease, border-color 0.2s ease;
+    }
+
+    button:active { transform: translateY(1px); }
+
+    .primary {
+      background: var(--primary);
+      color: white;
+    }
+    .primary:hover { background: var(--primary-hover); }
+
+    .secondary {
+      background: white;
+      color: var(--text);
+      border: 1px solid var(--outline);
+    }
+
+    .status {
+      min-height: 20px;
+      margin-top: 12px;
+      font-size: 13px;
+      color: #16a34a;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Random Code Generator</h1>
+    <p>Generate a 12-character alphanumeric code with one click.</p>
+
+    <section class="code-box" aria-live="polite">
+      <div id="code" class="code">------------</div>
+      <div class="meta">12 characters · A-Z and 0-9</div>
+    </section>
+
+    <div class="buttons">
+      <button class="primary" id="generateBtn" type="button">Generate</button>
+      <button class="secondary" id="copyBtn" type="button">Copy</button>
+    </div>
+
+    <div id="status" class="status"></div>
+  </main>
+
+  <script>
+    const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const codeEl = document.getElementById('code');
+    const statusEl = document.getElementById('status');
+    const generateBtn = document.getElementById('generateBtn');
+    const copyBtn = document.getElementById('copyBtn');
+
+    function generateCode(length = 12) {
+      const arr = new Uint32Array(length);
+      crypto.getRandomValues(arr);
+      let out = '';
+      for (let i = 0; i < length; i++) {
+        out += ALPHABET[arr[i] % ALPHABET.length];
+      }
+      return out;
+    }
+
+    function formatCode(code) {
+      return code.match(/.{1,4}/g).join('-');
+    }
+
+    function setCode() {
+      const code = generateCode(12);
+      codeEl.textContent = formatCode(code);
+      statusEl.textContent = '';
+      copyBtn.textContent = 'Copy';
+      return code;
+    }
+
+    let currentCode = setCode();
+
+    generateBtn.addEventListener('click', () => {
+      currentCode = setCode();
+    });
+
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(currentCode);
+        copyBtn.textContent = 'Copied';
+        statusEl.textContent = 'Code copied to clipboard.';
+      } catch {
+        statusEl.textContent = 'Clipboard access was blocked by the browser.';
+      }
+    });
+  </script>
+</body>
+</html>
