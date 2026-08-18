@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#2563eb">
-<title>Patent Examiner Tools V1.0</title>
+<title>Patent Examiner Tools</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f5f7fb;color:#111827;min-height:100vh}
@@ -218,7 +218,7 @@ body {
 <body>
 <div class="app">
   <div class="header">
-    <h1>Patent Examiner Tools V1.0</h1>
+    <h1>Patent Examiner Tools</h1>
     <p>Browser-based utilities for prior-art organisation and examiner workflows.</p>
   </div>
 
@@ -302,18 +302,43 @@ let renamePlan = [];
 */
 function extractPatentNumber(filename) {
 
-    // Remove final extension.
+    // Remove final extension only. Everything else may contain prefixes,
+    // suffixes, underscores, hyphens, brackets, dots, etc.
     const stem = filename.replace(/\.[^.]+$/, "");
 
     const countryCodes =
         "CN|US|EP|WO|JP|KR|TW|SG|AU|GB|CA|DE|FR|IN|MY|TH|ID|PH|VN|NZ";
 
+    /*
+        Detect the patent/publication number as its own alphanumeric token.
+
+        Examples:
+          OSD1-WO2023078119A1_Machine Translation
+              -> WO2023078119A1
+
+          ABC_(CN105630914A)-English
+              -> CN105630914A
+
+          US 2005/0231503 A1
+              -> US20050231503A1
+
+        The characters before and after the patent number may be ANY
+        non-alphanumeric symbols. Underscore is therefore treated as a
+        separator too (unlike JavaScript's \b word-boundary behavior).
+
+        We deliberately require a non-alphanumeric boundary, or the start/end
+        of the filename, so an internal case-reference fragment such as
+        "87181384SG06" is not mistaken for patent SG06.
+    */
     const regex = new RegExp(
-        "\\b(" + countryCodes + ")" +
-        "[\\s._-]*" +
-        "\\d(?:[\\d\\s\\/._-]*\\d)?" +
-        "(?:[\\s._-]*[A-Z]\\d?)?" +
-        "\\b",
+        "(?:^|[^A-Za-z0-9])" +
+        "(" +
+            "(?:" + countryCodes + ")" +
+            "[\\s._\\/-]*" +
+            "\\d(?:[\\d\\s._\\/-]*\\d)?" +
+            "(?:[\\s._\\/-]*[A-Z]\\d?)?" +
+        ")" +
+        "(?=$|[^A-Za-z0-9])",
         "i"
     );
 
@@ -323,9 +348,9 @@ function extractPatentNumber(filename) {
         return null;
     }
 
-    // CN 105630914 A -> CN105630914A
-    // US 2005/0231503 A1 -> US20050231503A1
-    return match[0]
+    // Normalize separators inside the detected patent number:
+    // WO 2023/078119 A1 -> WO2023078119A1
+    return match[1]
         .replace(/[^A-Za-z0-9]/g, "")
         .toUpperCase();
 }
