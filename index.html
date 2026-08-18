@@ -364,6 +364,20 @@ async function selectFolder() {
 }
 
 
+async function containsFileWrapper(fileHandle) {
+
+    try {
+        const file = await fileHandle.getFile();
+        const buffer = await file.arrayBuffer();
+        const text = new TextDecoder("latin1").decode(buffer);
+        return text.toLowerCase().includes("filewrapper");
+    } catch (err) {
+        console.warn(`Could not inspect ${fileHandle.name} for filewrapper:`, err);
+        return false;
+    }
+}
+
+
 async function buildRenamePlan() {
 
     renamePlan = [];
@@ -409,6 +423,21 @@ async function buildRenamePlan() {
         ) || 1;
 
     for (const fileHandle of files) {
+
+        // Files containing the marker "filewrapper" are intentionally ignored.
+        // They are not renamed and do not consume a D-number.
+        if (await containsFileWrapper(fileHandle)) {
+
+            renamePlan.push({
+                handle: fileHandle,
+                oldName: fileHandle.name,
+                newName: "",
+                valid: false,
+                status: "Skipped: contains filewrapper"
+            });
+
+            continue;
+        }
 
         const patentNumber =
             extractPatentNumber(fileHandle.name);
