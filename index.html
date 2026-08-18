@@ -218,7 +218,7 @@ body {
 <body>
 <div class="app">
   <div class="header">
-    <h1>Patent Examiner Tools V1.1</h1>
+    <h1>Patent Examiner Tools V2.0</h1>
     <p>Browser-based utilities for prior-art organisation and examiner workflows.</p>
   </div>
 
@@ -360,16 +360,13 @@ function extractPatentNumber(filename) {
     Extract an explicit prior-art D-number from the filename.
 
     Supported examples:
-      D1-CN101960865A.pdf       -> D1
-      ODD1 CN101960865A.pdf     -> D1
-      OSD2 CN101960865A.pdf     -> D2
-      ABC ODD3 CN101960865A.pdf -> D3
+      D1-CN101960865A.pdf        -> D1
+      ODD1 CN101960865A.pdf      -> D1
+      OSD2 CN101960865A.pdf      -> D2
+      CITED DOC D3-How to fly    -> D3
 
-    ODDn / OSDn are treated as numbering hints only; the files are
-    still renamed into the normal Dn-[App No.] format.
-
-    Importantly, ODDn / OSDn are detected even when they are the very
-    first characters of the filename.
+    ODDn / OSDn / Dn are treated as numbering hints. ODDn and OSDn
+    are detected even when they are the very first characters.
 */
 function extractExplicitDNumber(filename) {
 
@@ -381,7 +378,7 @@ function extractExplicitDNumber(filename) {
         return parseInt(finalNameMatch[1], 10);
     }
 
-    // Legacy/source labels at the START of the filename.
+    // ODDn / OSDn at the START of the filename.
     const startsWithLegacyMatch =
         filename.match(/^(?:ODD|OSD)\s*[-_.]?\s*(\d+)\b/i);
 
@@ -389,7 +386,7 @@ function extractExplicitDNumber(filename) {
         return parseInt(startsWithLegacyMatch[1], 10);
     }
 
-    // Legacy/source labels elsewhere in the filename.
+    // ODDn / OSDn elsewhere in the filename.
     const legacyMatch =
         filename.match(/(?:^|[^A-Z0-9])(?:ODD|OSD)\s*[-_.]?\s*(\d+)(?=$|[^A-Z0-9])/i);
 
@@ -397,9 +394,114 @@ function extractExplicitDNumber(filename) {
         return parseInt(legacyMatch[1], 10);
     }
 
+    // Plain Dn label anywhere in the filename, e.g. "CITED DOC D1-...".
+    const plainDMatch =
+        filename.match(/(?:^|[^A-Z0-9])D\s*[-_.]?\s*(\d+)(?=$|[^A-Z0-9])/i);
+
+    if (plainDMatch) {
+        return parseInt(plainDMatch[1], 10);
+    }
+
     return null;
 }
 
+
+/*
+    Extract an NPL title from the text AFTER its D-number marker.
+
+    Examples:
+      ASDASDAS OSD1-How to fly.pdf
+          -> "How to fly"
+
+      CITED DOC D1-How to fly.pdf
+          -> "How to fly"
+
+    This is used only when no patent/publication number is detected.
+*/
+function extractNplTitle(filename) {
+
+    const stem =
+        filename.replace(/\.(?:pdf|pfd)$/i, "");
+
+    const markerRegex =
+        /(?:ODD|OSD|D)\s*(\d+)/ig;
+
+    let match;
+
+    while ((match = markerRegex.exec(stem)) !== null) {
+
+        const before =
+            match.index > 0
+                ? stem.charAt(match.index - 1)
+                : "";
+
+        const afterIndex =
+            match.index + match[0].length;
+
+        const after =
+            afterIndex < stem.length
+                ? stem.charAt(afterIndex)
+                : "";
+
+        // The marker must be its own token, not embedded in another word.
+        if (
+            (before && /[A-Za-z0-9]/.test(before)) ||
+            (after && /[A-Za-z0-9]/.test(after))
+        ) {
+            continue;
+        }
+
+        let title =
+            stem.slice(afterIndex)
+                .replace(/^[\s._\-:;()[\]{}]+/, "")
+                .trim();
+
+        if (!title) {
+            continue;
+        }
+
+        /*
+            Make the title safe as a Windows/macOS filename while otherwise
+            preserving the human-readable NPL title.
+        */
+        /*
+            Clean common wrapper artefacts from NPL filenames.
+
+            Example source:
+              Cited Documents (... D6. Log data query method ... medium.pdf).pdf
+
+            Desired title:
+              Log data query method ... medium
+
+            Repeatedly remove:
+              - trailing wrapper brackets such as ")" "]" "}"
+              - embedded trailing .pdf / .pfd extensions
+              - trailing spaces / dots
+        */
+        let previousTitle;
+
+        do {
+            previousTitle = title;
+
+            title = title
+                .replace(/[\s)\]}]+$/g, "")
+                .replace(/\.(?:pdf|pfd)$/i, "")
+                .replace(/[. ]+$/g, "")
+                .trim();
+
+        } while (title !== previousTitle);
+
+        title = title
+            .replace(/[<>:"/\\|?*\x00-\x1F]/g, "-")
+            .replace(/\s+/g, " ")
+            .replace(/[. ]+$/g, "")
+            .trim();
+
+        return title || null;
+    }
+
+    return null;
+}
 
 /*
     Detect whether an already-renamed file is the English/translation copy.
@@ -464,12 +566,12 @@ async function buildRenamePlan() {
 
     const files = [];
 
-    // Get PDF files only.
+    // Get PDF files. ".pfd" is also accepted in case a PDF was misnamed.
     for await (const entry of directoryHandle.values()) {
 
         if (
             entry.kind === "file" &&
-            entry.name.toLowerCase().endsWith(".pdf")
+            /\.(?:pdf|pfd)$/i.test(entry.name)
         ) {
             files.push(entry);
         }
@@ -493,69 +595,83 @@ async function buildRenamePlan() {
             10
         ) || 1;
 
+    const patentCandidates = [];
+    const nplCandidates = [];
+
     /*
-        First collect only genuine prior-art candidates.
+        Classify files.
 
-        A PDF whose CONTENT contains "filewrapper" is completely ignored:
-        it is not shown, not counted, and does not consume a D-number.
+        1. FileWrapper files are completely ignored.
+        2. If a patent/publication number is detected -> patent prior art.
+        3. Otherwise, if an explicit ODDn / OSDn / Dn marker is present and
+           there is a title after the marker -> NPL prior art.
+        4. Otherwise the file is not treated as a rename candidate.
     */
-    const candidates = [];
-
     for (const fileHandle of files) {
 
         if (await containsFileWrapper(fileHandle)) {
             continue;
         }
 
+        const explicitD =
+            extractExplicitDNumber(fileHandle.name);
+
         const patentNumber =
             extractPatentNumber(fileHandle.name);
 
-        if (!patentNumber) {
+        if (patentNumber) {
 
-            renamePlan.push({
+            patentCandidates.push({
                 handle: fileHandle,
                 oldName: fileHandle.name,
-                newName: "",
-                valid: false,
-                status: "Patent number not detected"
+                patentNumber: patentNumber,
+                existingD: explicitD,
+                alreadyRenamed: /^D\d+-/i.test(fileHandle.name),
+                alreadyEnglish: isAlreadyEnglishCopy(fileHandle.name),
+                role: "original"
             });
 
             continue;
         }
 
-        const explicitD =
-            extractExplicitDNumber(fileHandle.name);
+        const nplTitle =
+            explicitD !== null
+                ? extractNplTitle(fileHandle.name)
+                : null;
 
-        candidates.push({
+        if (explicitD !== null && nplTitle) {
+
+            nplCandidates.push({
+                handle: fileHandle,
+                oldName: fileHandle.name,
+                title: nplTitle,
+                existingD: explicitD,
+                alreadyRenamed: /^D\d+-/i.test(fileHandle.name)
+            });
+
+            continue;
+        }
+
+        renamePlan.push({
             handle: fileHandle,
             oldName: fileHandle.name,
-            patentNumber: patentNumber,
-            existingD: explicitD,
-            alreadyRenamed: /^D\d+-/i.test(fileHandle.name),
-            alreadyEnglish: isAlreadyEnglishCopy(fileHandle.name),
-            role: "original"
+            newName: "",
+            valid: false,
+            status: "No patent number or valid NPL D-label/title detected"
         });
     }
 
     /*
-        Group files by patent/application number.
+        PATENT PRIOR ART:
+        Group by patent/application number.
 
-        No keyword such as "trans" or "translation" is used.
-
-        If exactly two source files contain the same patent number:
-          - the SHORTER filename becomes Dn-[App No.].pdf
-          - the LONGER filename becomes Dn-[App No.]-EN.pdf
-
-        This follows the requested rule that the longer duplicate filename
-        is treated as the English/translation copy.
-
-        If more than two unrenamed duplicates exist, the shortest is treated
-        as the original, the longest as the English copy, and additional
-        middle duplicates are left untouched to avoid destructive collisions.
+        No "trans" / "translation" keyword is used. If duplicate patent
+        numbers are present, the shorter filename is the original and the
+        longer filename becomes the -EN copy.
     */
     const groups = new Map();
 
-    for (const item of candidates) {
+    for (const item of patentCandidates) {
 
         if (!groups.has(item.patentNumber)) {
             groups.set(item.patentNumber, []);
@@ -566,10 +682,6 @@ async function buildRenamePlan() {
 
     for (const group of groups.values()) {
 
-        /*
-            Preserve roles of files that already use our final naming format.
-            For unrenamed files, assign roles using duplicate filename length.
-        */
         const unrenamed =
             group.filter(x => !x.alreadyRenamed);
 
@@ -579,86 +691,78 @@ async function buildRenamePlan() {
         const hasExistingEnglish =
             group.some(x => x.alreadyRenamed && x.alreadyEnglish);
 
-        if (unrenamed.length > 0) {
+        if (unrenamed.length === 0) {
+            continue;
+        }
 
-            const sortedByLength = [...unrenamed].sort((a, b) => {
+        const sortedByLength = [...unrenamed].sort((a, b) => {
 
-                const lengthDifference =
-                    a.oldName.length - b.oldName.length;
+            const lengthDifference =
+                a.oldName.length - b.oldName.length;
 
-                if (lengthDifference !== 0) {
-                    return lengthDifference;
+            if (lengthDifference !== 0) {
+                return lengthDifference;
+            }
+
+            return a.oldName.localeCompare(
+                b.oldName,
+                undefined,
+                {
+                    numeric: true,
+                    sensitivity: "base"
                 }
+            );
+        });
 
-                return a.oldName.localeCompare(
-                    b.oldName,
-                    undefined,
-                    {
-                        numeric: true,
-                        sensitivity: "base"
-                    }
-                );
-            });
+        if (!hasExistingOriginal && !hasExistingEnglish) {
 
-            /*
-                If neither final copy exists yet:
-                  shortest = original
-                  longest  = English copy (when duplicated)
-            */
-            if (!hasExistingOriginal && !hasExistingEnglish) {
+            sortedByLength[0].role = "original";
 
-                sortedByLength[0].role = "original";
+            if (sortedByLength.length >= 2) {
+                sortedByLength[sortedByLength.length - 1].role = "english";
+            }
 
-                if (sortedByLength.length >= 2) {
-                    sortedByLength[sortedByLength.length - 1].role = "english";
-                }
+            for (let i = 1; i < sortedByLength.length - 1; i++) {
+                sortedByLength[i].role = "extra";
+            }
 
-                for (let i = 1; i < sortedByLength.length - 1; i++) {
-                    sortedByLength[i].role = "extra";
-                }
+        } else if (hasExistingOriginal && !hasExistingEnglish) {
 
-            } else {
+            sortedByLength[sortedByLength.length - 1].role = "english";
 
-                /*
-                    If one side is already renamed, let an unrenamed duplicate
-                    fill the missing side. This is useful when the tool is run
-                    again after only one of the pair has previously been renamed.
-                */
-                if (hasExistingOriginal && !hasExistingEnglish) {
-                    sortedByLength[sortedByLength.length - 1].role = "english";
+            for (let i = 0; i < sortedByLength.length - 1; i++) {
+                sortedByLength[i].role = "extra";
+            }
 
-                    for (let i = 0; i < sortedByLength.length - 1; i++) {
-                        sortedByLength[i].role = "extra";
-                    }
+        } else if (!hasExistingOriginal && hasExistingEnglish) {
 
-                } else if (!hasExistingOriginal && hasExistingEnglish) {
-                    sortedByLength[0].role = "original";
+            sortedByLength[0].role = "original";
 
-                    for (let i = 1; i < sortedByLength.length; i++) {
-                        sortedByLength[i].role = "extra";
-                    }
+            for (let i = 1; i < sortedByLength.length; i++) {
+                sortedByLength[i].role = "extra";
+            }
 
-                } else {
-                    for (const item of sortedByLength) {
-                        item.role = "extra";
-                    }
-                }
+        } else {
+
+            for (const item of sortedByLength) {
+                item.role = "extra";
             }
         }
     }
 
     /*
-        Assign D-numbers by patent/application number.
+        D-number assignment.
 
-        Explicit D-number hints are honored, including:
-          ODD1 -> D1
-          OSD2 -> D2
-          OSD3 at the START of a filename -> D3
-
-        All duplicate files sharing the same patent number share that D-number.
+        Explicit D-numbers from BOTH patent prior art and NPL are reserved
+        before auto-numbering patent references, so an NPL marked D1 prevents
+        an unnumbered patent reference from also being auto-assigned D1.
     */
     const patentToD = new Map();
     const usedDNumbers = new Set();
+
+    for (const item of nplCandidates) {
+        usedDNumbers.add(item.existingD);
+    }
 
     for (const [patentNumber, group] of groups.entries()) {
 
@@ -707,11 +811,12 @@ async function buildRenamePlan() {
     }
 
     /*
-        Build the preview and rename plan.
+        Build preview / rename plan.
     */
     const plannedTargets = new Set();
 
-    for (const item of candidates) {
+    // Patent references first.
+    for (const item of patentCandidates) {
 
         const dNumber =
             patentToD.get(item.patentNumber);
@@ -779,17 +884,78 @@ async function buildRenamePlan() {
         });
     }
 
+    // NPL references.
+    for (const item of nplCandidates) {
+
+        const newName =
+            `D${item.existingD}-${item.title}.pdf`;
+
+        if (
+            item.alreadyRenamed &&
+            item.oldName.toLowerCase() === newName.toLowerCase()
+        ) {
+
+            renamePlan.push({
+                handle: item.handle,
+                oldName: item.oldName,
+                newName: item.oldName,
+                valid: false,
+                status: "Already renamed NPL"
+            });
+
+            plannedTargets.add(
+                item.oldName.toLowerCase()
+            );
+
+            continue;
+        }
+
+        const targetKey =
+            newName.toLowerCase();
+
+        if (plannedTargets.has(targetKey)) {
+
+            renamePlan.push({
+                handle: item.handle,
+                oldName: item.oldName,
+                newName: newName,
+                valid: false,
+                status: "Duplicate NPL target — left unchanged"
+            });
+
+            continue;
+        }
+
+        plannedTargets.add(targetKey);
+
+        renamePlan.push({
+            handle: item.handle,
+            oldName: item.oldName,
+            newName: newName,
+            valid: true,
+            status: `Ready — NPL, uses D${item.existingD}`
+        });
+    }
+
     renderPreview();
 
     document.getElementById("renameButton").disabled =
         !renamePlan.some(x => x.valid);
 
-    const uniquePriorArt =
+    const uniquePatentPriorArt =
         groups.size;
 
+    const uniqueNplPriorArt =
+        new Set(
+            nplCandidates.map(
+                x => `${x.existingD}|${x.title.toLowerCase()}`
+            )
+        ).size;
+
     document.getElementById("status").innerHTML =
-        `${candidates.length} prior-art PDF file(s) detected, representing ` +
-        `${uniquePriorArt} unique prior-art document(s). Review the preview before renaming.`;
+        `${patentCandidates.length + nplCandidates.length} prior-art PDF file(s) detected: ` +
+        `${uniquePatentPriorArt} patent reference(s) and ` +
+        `${uniqueNplPriorArt} NPL reference(s). Review the preview before renaming.`;
 }
 
 function renderPreview() {
