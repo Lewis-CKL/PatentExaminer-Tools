@@ -45,6 +45,13 @@ code.inline{background:#f1f5f9;padding:2px 6px;border-radius:6px}
 .generator-buttons{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .generator-status{min-height:20px;margin-top:12px;font-size:13px;color:#16a34a}
 .footer{margin-top:18px;font-size:12px;color:#64748b;text-align:center}
+
+.translation-settings{display:grid;grid-template-columns:minmax(260px,1fr) auto;gap:10px;align-items:end;margin:14px 0}
+.translation-settings label{display:block;font-weight:600;margin-bottom:6px}
+.translation-settings input,.translation-language{width:100%;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff}
+.translation-actions{display:flex;gap:8px;flex-wrap:wrap}
+.small-muted{font-size:12px;color:#64748b;margin-top:5px}
+.progress-pill{display:inline-block;padding:3px 8px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:12px;font-weight:700}
 @media(max-width:640px){.app{padding:20px 12px 36px}.panel{padding:16px}.header h1{font-size:24px}.generator-buttons{grid-template-columns:1fr}}
 body {
         font-family: Arial, sans-serif;
@@ -218,14 +225,14 @@ body {
 <body>
 <div class="app">
   <div class="header">
-    <h1>Patent Examiner Tools V2.0</h1>
-    <p>Browser-based utilities for prior-art organisation and examiner workflows.</p>
+    <h1>Patent Examiner Tools V2.1</h1>
+    <p>Browser-based utilities for prior-art organisation, application-document housekeeping, and examiner workflows.</p>
   </div>
 
   <div class="tabs">
     <button class="tab active" data-tool="renamer">Prior Art Renamer</button>
+    <button class="tab" data-tool="applicationRenamer">Application Document Renamer</button>
     <button class="tab" data-tool="generator">12-Character Code Generator</button>
-    <button class="tab" data-tool="documentRenamer">Application Document Renamer</button>
   </div>
 
   <section id="renamer" class="tool active">
@@ -251,6 +258,63 @@ body {
     </div>
   </section>
 
+  <section id="applicationRenamer" class="tool">
+    <div class="panel">
+      <h2 class="renamer-title">Application Document Renamer</h2>
+      <div class="note">
+        Reorders application-document filenames from <code class="inline">DATE_REFERENCE Document Name.pdf</code> to <code class="inline">Document Name_REFERENCE_DATE.pdf</code>.<br>
+        Example: <code class="inline">20260202_1703P160DIV1 Abstract.pdf</code> → <code class="inline">Abstract_1703P160DIV1_20260202.pdf</code><br>
+        The document name may contain multiple words. Files are processed locally in your browser.
+      </div>
+      <div class="row">
+        <button class="action primary" id="applicationSelectFolderBtn" type="button">Select Folder</button>
+        <button class="action" id="applicationRenameButton" type="button" disabled>Rename Files</button>
+      </div>
+      <div id="applicationStatus" class="status"></div>
+      <div class="table-wrap">
+        <table id="applicationPreviewTable">
+          <thead><tr><th>#</th><th>Current Filename</th><th>New Filename</th><th>Status</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="translation" class="tool">
+    <div class="panel">
+      <h2 class="renamer-title">Translation</h2>
+      <div class="note">
+        Uses the same EPO Patent Translate job flow as the supplied PowerShell application: start an EPO translation job, poll it to completion, retrieve the EPO translated PDF sections, and download the result as <code class="inline">D#-[publication]-EN.pdf</code>.
+      </div>
+
+      <div class="translation-settings">
+        <div>
+          <label for="translationApiBase">Translation service URL</label>
+          <input id="translationApiBase" type="url" placeholder="https://your-translation-service.example.com">
+          <div class="small-muted">The GitHub Pages site is only the front end. The EPO translation relay must be running at this URL.</div>
+        </div>
+        <div class="translation-actions">
+          <button class="action" id="saveTranslationApiBtn" type="button">Save URL</button>
+          <button class="action" id="testTranslationApiBtn" type="button">Test Connection</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="action primary" id="translationSelectFolderBtn" type="button">Select Prior Art Folder</button>
+        <button class="action" id="translationRefreshBtn" type="button" disabled>Refresh</button>
+      </div>
+
+      <div id="translationStatus" class="status"></div>
+
+      <div class="table-wrap">
+        <table id="translationTable">
+          <thead><tr><th>#</th><th>Prior Art File</th><th>Publication No.</th><th>Source language</th><th>Output</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <section id="generator" class="tool">
     <div class="panel generator">
       <h2>Random Code Generator</h2>
@@ -267,59 +331,7 @@ body {
     </div>
   </section>
 
-  <section id="documentRenamer" class="tool">
-    <div class="panel">
-        <h2 class="renamer-title">Application Document Renamer</h2>
-
-        <div class="note">
-            Example:
-            <code class="inline">
-                20260202_1703P160DIV1 Abstract.pdf
-            </code>
-            →
-            <code class="inline">
-                Abstract_1703P160DIV1_20260202.pdf
-            </code>
-            <br>
-            Files are processed locally in your browser.
-        </div>
-
-        <div class="row">
-            <button
-                class="action primary"
-                id="selectDocumentFolderBtn"
-                type="button">
-                Select Folder
-            </button>
-
-            <button
-                class="action"
-                id="renameDocumentButton"
-                type="button"
-                disabled>
-                Rename Files
-            </button>
-        </div>
-
-        <div id="documentRenameStatus" class="status"></div>
-
-        <div class="table-wrap">
-            <table id="documentPreviewTable">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Current Filename</th>
-                        <th>New Filename</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </div>
-    </div>
-  </section>
-
-  <div class="footer">GitHub Pages-ready static app. Requires a browser with folder access support for the renamer.</div>
+  <div class="footer">GitHub Pages front end. Folder tools require a browser with File System Access API support; automatic EPO translation also requires the supplied relay service.</div>
 </div>
 
 <script>
@@ -1201,6 +1213,466 @@ function escapeHTML(value) {
 // Wire renamer buttons to existing functions
 document.getElementById('selectFolderBtn').addEventListener('click', selectFolder);
 document.getElementById('renameButton').addEventListener('click', renameFiles);
+
+// Application Document Renamer
+let applicationDirectoryHandle = null;
+let applicationRenamePlan = [];
+
+/*
+    Expected source format:
+      YYYYMMDD_REFERENCE Document Name.pdf
+
+    Example:
+      20260202_1703P160DIV1 Abstract.pdf
+        -> Abstract_1703P160DIV1_20260202.pdf
+
+    Rules:
+      - date must be exactly 8 digits at the start;
+      - the date is followed by an underscore;
+      - the reference/additional information is the next non-space token;
+      - everything after the first whitespace is the document name;
+      - document names may contain multiple words;
+      - PDF and accidentally mistyped PFD extensions are accepted;
+      - the output extension is normalized to .pdf.
+*/
+function parseApplicationDocumentFilename(filename) {
+    const match = filename.match(/^(\d{8})_([^\s]+)\s+(.+)\.(?:pdf|pfd)$/i);
+
+    if (!match) {
+        return null;
+    }
+
+    const date = match[1];
+    const reference = match[2].trim();
+
+    let documentName = match[3]
+        .replace(/\.(?:pdf|pfd)$/i, "")
+        .trim();
+
+    // Windows/macOS-safe filename cleanup while preserving readable spaces.
+    documentName = documentName
+        .replace(/[<>:"/\\|?*\x00-\x1F]/g, "-")
+        .replace(/\s+/g, " ")
+        .replace(/[. ]+$/g, "")
+        .trim();
+
+    const safeReference = reference
+        .replace(/[<>:"/\\|?*\x00-\x1F]/g, "-")
+        .replace(/[. ]+$/g, "")
+        .trim();
+
+    if (!date || !safeReference || !documentName) {
+        return null;
+    }
+
+    return {
+        date,
+        reference: safeReference,
+        documentName,
+        newName: `${documentName}_${safeReference}_${date}.pdf`
+    };
+}
+
+async function selectApplicationFolder() {
+    if (!("showDirectoryPicker" in window)) {
+        alert(
+            "Your browser does not support folder access.\n\n" +
+            "Please use a recent version of Chrome or Microsoft Edge."
+        );
+        return;
+    }
+
+    try {
+        applicationDirectoryHandle = await window.showDirectoryPicker();
+
+        const permission = await applicationDirectoryHandle.requestPermission({
+            mode: "readwrite"
+        });
+
+        if (permission !== "granted") {
+            throw new Error("Read/write permission was not granted.");
+        }
+
+        await buildApplicationRenamePlan();
+    } catch (err) {
+        // User cancellation should not be shown as a scary error.
+        if (err && err.name === "AbortError") {
+            return;
+        }
+
+        document.getElementById("applicationStatus").innerHTML =
+            '<span class="error">' + escapeHTML(err.message || String(err)) + '</span>';
+    }
+}
+
+async function applicationFileExists(name) {
+    try {
+        await applicationDirectoryHandle.getFileHandle(name);
+        return true;
+    } catch (err) {
+        if (err.name === "NotFoundError") {
+            return false;
+        }
+        throw err;
+    }
+}
+
+async function buildApplicationRenamePlan() {
+    applicationRenamePlan = [];
+
+    const files = [];
+
+    for await (const entry of applicationDirectoryHandle.values()) {
+        if (entry.kind === "file" && /\.(?:pdf|pfd)$/i.test(entry.name)) {
+            files.push(entry);
+        }
+    }
+
+    files.sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, {
+            numeric: true,
+            sensitivity: "base"
+        })
+    );
+
+    const existingNames = new Set(files.map(x => x.name.toLowerCase()));
+    const plannedTargets = new Set();
+
+    for (const fileHandle of files) {
+        const parsed = parseApplicationDocumentFilename(fileHandle.name);
+
+        if (!parsed) {
+            applicationRenamePlan.push({
+                handle: fileHandle,
+                oldName: fileHandle.name,
+                newName: "",
+                valid: false,
+                status: /_\d{8}\.pdf$/i.test(fileHandle.name)
+                    ? "Already appears renamed"
+                    : "Does not match DATE_REFERENCE Document Name.pdf"
+            });
+            continue;
+        }
+
+        const targetKey = parsed.newName.toLowerCase();
+        const oldKey = fileHandle.name.toLowerCase();
+
+        if (parsed.newName === fileHandle.name) {
+            applicationRenamePlan.push({
+                handle: fileHandle,
+                oldName: fileHandle.name,
+                newName: parsed.newName,
+                valid: false,
+                status: "Already renamed"
+            });
+            continue;
+        }
+
+        if ((existingNames.has(targetKey) && targetKey !== oldKey) || plannedTargets.has(targetKey)) {
+            applicationRenamePlan.push({
+                handle: fileHandle,
+                oldName: fileHandle.name,
+                newName: parsed.newName,
+                valid: false,
+                status: "Target filename already exists or is duplicated"
+            });
+            continue;
+        }
+
+        plannedTargets.add(targetKey);
+
+        applicationRenamePlan.push({
+            handle: fileHandle,
+            oldName: fileHandle.name,
+            newName: parsed.newName,
+            valid: true,
+            status: "Ready"
+        });
+    }
+
+    renderApplicationPreview();
+
+    const readyCount = applicationRenamePlan.filter(x => x.valid).length;
+    const matchedCount = applicationRenamePlan.filter(x => x.newName).length;
+
+    document.getElementById("applicationRenameButton").disabled = readyCount === 0;
+
+    document.getElementById("applicationStatus").innerHTML =
+        files.length === 0
+            ? '<span class="skip">No PDF files found in the selected folder.</span>'
+            : `${files.length} PDF file(s) found. ${matchedCount} matched the application-document pattern; ` +
+              `<span class="ok">${readyCount} ready to rename.</span>`;
+}
+
+function renderApplicationPreview() {
+    const tbody = document.querySelector("#applicationPreviewTable tbody");
+    tbody.innerHTML = "";
+
+    applicationRenamePlan.forEach((item, index) => {
+        const row = document.createElement("tr");
+        const statusClass = item.valid ? "ok" : "skip";
+
+        row.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${escapeHTML(item.oldName)}</td>
+            <td>${item.newName ? escapeHTML(item.newName) : "—"}</td>
+            <td class="${statusClass}">${escapeHTML(item.status)}</td>
+        `;
+
+        tbody.appendChild(row);
+    });
+}
+
+async function renameSingleApplicationFile(item) {
+    if (item.oldName === item.newName) {
+        return;
+    }
+
+    if (await applicationFileExists(item.newName)) {
+        throw new Error("Target file already exists: " + item.newName);
+    }
+
+    const sourceFile = await item.handle.getFile();
+    const targetHandle = await applicationDirectoryHandle.getFileHandle(
+        item.newName,
+        { create: true }
+    );
+
+    const writable = await targetHandle.createWritable();
+
+    try {
+        await writable.write(sourceFile);
+        await writable.close();
+    } catch (err) {
+        try {
+            await writable.abort();
+        } catch {}
+        throw err;
+    }
+
+    // Delete the old file only after the new file has been written successfully.
+    await applicationDirectoryHandle.removeEntry(item.oldName);
+}
+
+async function renameApplicationFiles() {
+    const validItems = applicationRenamePlan.filter(x => x.valid);
+
+    if (!validItems.length) {
+        return;
+    }
+
+    const message =
+        `Rename ${validItems.length} application document file(s)?\n\n` +
+        `Example:\n${validItems[0].oldName}\n→\n${validItems[0].newName}`;
+
+    if (!confirm(message)) {
+        return;
+    }
+
+    const button = document.getElementById("applicationRenameButton");
+    button.disabled = true;
+
+    let renamed = 0;
+    let errors = 0;
+
+    for (const item of validItems) {
+        document.getElementById("applicationStatus").textContent =
+            `Renaming ${renamed + errors + 1} of ${validItems.length}: ${item.oldName}`;
+
+        try {
+            await renameSingleApplicationFile(item);
+            item.status = "Renamed";
+            item.valid = false;
+            renamed++;
+        } catch (err) {
+            item.status = "ERROR: " + (err.message || String(err));
+            item.valid = false;
+            errors++;
+        }
+
+        renderApplicationPreview();
+    }
+
+    document.getElementById("applicationStatus").innerHTML =
+        `<span class="ok">${renamed} file(s) renamed.</span>` +
+        (errors ? ` <span class="error">${errors} error(s).</span>` : "");
+}
+
+document.getElementById("applicationSelectFolderBtn")
+    .addEventListener("click", selectApplicationFolder);
+
+document.getElementById("applicationRenameButton")
+    .addEventListener("click", renameApplicationFiles);
+
+// Automatic EPO Patent Translate client
+let translationDirectoryHandle = null;
+let translationItems = [];
+
+const TRANSLATION_LANGUAGE_OPTIONS = [
+  ["auto","Auto"],["zh","Chinese"],["ja","Japanese"],["ko","Korean"],
+  ["de","German"],["fr","French"],["es","Spanish"],["it","Italian"],
+  ["pt","Portuguese"],["nl","Dutch"],["ru","Russian"],["pl","Polish"],
+  ["sv","Swedish"],["fi","Finnish"],["da","Danish"],["no","Norwegian"],
+  ["tr","Turkish"],["cs","Czech"],["sk","Slovak"],["hu","Hungarian"],
+  ["ro","Romanian"],["bg","Bulgarian"],["hr","Croatian"],["sl","Slovenian"],["el","Greek"]
+];
+
+function defaultSourceLanguage(pn) {
+  const cc = pn.slice(0,2).toUpperCase();
+  const map = {CN:"zh",TW:"zh",JP:"ja",KR:"ko",DE:"de",FR:"fr",ES:"es",IT:"it",PT:"pt",NL:"nl",RU:"ru",PL:"pl",SE:"sv",FI:"fi",DK:"da",NO:"no",TR:"tr",CZ:"cs",SK:"sk",HU:"hu",RO:"ro",BG:"bg",HR:"hr",SI:"sl",GR:"el",AT:"de",CH:"de"};
+  return map[cc] || "auto";
+}
+
+function getTranslationApiBase() {
+  return (document.getElementById("translationApiBase").value || "").trim().replace(/\/$/, "");
+}
+
+function saveTranslationApiBase() {
+  const value = getTranslationApiBase();
+  localStorage.setItem("patentExaminerTranslationApi", value);
+  document.getElementById("translationStatus").innerHTML = value
+    ? '<span class="ok">Translation service URL saved.</span>'
+    : '<span class="skip">Translation service URL cleared.</span>';
+}
+
+async function testTranslationApiBase() {
+  const base = getTranslationApiBase();
+  const status = document.getElementById("translationStatus");
+  if (!base) {
+    status.innerHTML = '<span class="error">Enter the relay URL first.</span>';
+    return;
+  }
+  status.innerHTML = '<span class="progress-pill">Testing connection...</span>';
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    const response = await fetch(base + "/health", {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    if (!response.ok) throw new Error(`Health check returned HTTP ${response.status}.`);
+    const body = await response.json();
+    if (body.status !== "ok") throw new Error("Relay returned an unexpected health response.");
+    status.innerHTML = '<span class="ok">Translation service is reachable.</span>';
+  } catch (err) {
+    const detail = err.name === "AbortError"
+      ? "Health check timed out."
+      : (err.name === "TypeError" ? "Browser could not reach the relay. Check the URL, HTTPS, deployment status, and CORS." : err.message);
+    status.innerHTML = '<span class="error">' + escapeHTML(detail) + '</span>';
+  }
+}
+
+async function selectTranslationFolder() {
+  if (!("showDirectoryPicker" in window)) {
+    alert("Please use a recent version of Chrome or Microsoft Edge.");
+    return;
+  }
+  try {
+    translationDirectoryHandle = await window.showDirectoryPicker();
+    const permission = await translationDirectoryHandle.requestPermission({mode:"read"});
+    if (permission !== "granted") throw new Error("Read permission was not granted.");
+    document.getElementById("translationRefreshBtn").disabled = false;
+    await scanTranslationFolder();
+  } catch (err) {
+    document.getElementById("translationStatus").innerHTML = '<span class="error">'+escapeHTML(err.message)+'</span>';
+  }
+}
+
+async function scanTranslationFolder() {
+  if (!translationDirectoryHandle) return;
+  const handles=[]; const names=[];
+  for await (const entry of translationDirectoryHandle.values()) {
+    if (entry.kind === "file" && /\.(?:pdf|pfd)$/i.test(entry.name)) { handles.push(entry); names.push(entry.name); }
+  }
+  handles.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:"base"}));
+  translationItems=[];
+  for (const fileHandle of handles) {
+    if (await containsFileWrapper(fileHandle)) continue;
+    const pn=extractPatentNumber(fileHandle.name);
+    if (!pn) continue;
+    if (/-EN\.(?:pdf|pfd)$/i.test(fileHandle.name)) continue;
+    const d=extractExplicitDNumber(fileHandle.name);
+    const output=d!==null ? `D${d}-${pn}-EN.pdf` : `${pn}-EN.pdf`;
+    const exists=names.some(n=>/-EN\.(?:pdf|pfd)$/i.test(n) && extractPatentNumber(n)===pn);
+    translationItems.push({file:fileHandle,oldName:fileHandle.name,pn,output,exists,language:defaultSourceLanguage(pn),status:exists?"EN copy already present":"Ready"});
+  }
+  renderTranslationTable();
+  const pending=translationItems.filter(x=>!x.exists).length;
+  document.getElementById("translationStatus").innerHTML = `${translationItems.length} patent prior-art file(s) detected; ${pending} translation candidate(s).`;
+}
+
+function languageSelectHtml(item,index) {
+  const opts=TRANSLATION_LANGUAGE_OPTIONS.map(([v,label])=>`<option value="${v}" ${item.language===v?"selected":""}>${label}</option>`).join("");
+  return `<select class="translation-language" data-index="${index}">${opts}</select>`;
+}
+
+function renderTranslationTable() {
+  const tbody=document.querySelector("#translationTable tbody");
+  tbody.innerHTML="";
+  translationItems.forEach((item,index)=>{
+    const row=document.createElement("tr");
+    const disabled=item.exists?"disabled":"";
+    row.innerHTML=`<td>${index+1}</td><td>${escapeHTML(item.oldName)}</td><td>${escapeHTML(item.pn)}</td><td>${languageSelectHtml(item,index)}</td><td>${escapeHTML(item.output)}</td><td class="${item.exists?'skip':'ok'}" id="translation-row-status-${index}">${escapeHTML(item.status)}</td><td><button class="action primary automatic-translate-btn" data-index="${index}" ${disabled}>Translate & Download</button></td>`;
+    tbody.appendChild(row);
+  });
+  tbody.querySelectorAll(".translation-language").forEach(s=>s.addEventListener("change",()=>{translationItems[Number(s.dataset.index)].language=s.value;}));
+  tbody.querySelectorAll(".automatic-translate-btn").forEach(b=>b.addEventListener("click",()=>translateAndDownload(Number(b.dataset.index),b)));
+}
+
+async function translateAndDownload(index,button) {
+  const item=translationItems[index];
+  const base=getTranslationApiBase();
+  const status=document.getElementById(`translation-row-status-${index}`);
+  if (!base) {
+    alert("Enter and save the Translation service URL first, then use Test Connection.");
+    return;
+  }
+  button.disabled=true;
+  const oldText=button.textContent;
+  button.textContent="Translating...";
+  status.className="";
+  status.innerHTML='<span class="progress-pill">Starting EPO translation...</span>';
+  try {
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(), 7*60*1000);
+    const response=await fetch(base+"/api/translate",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      cache:"no-store",
+      signal:controller.signal,
+      body:JSON.stringify({publicationNumber:item.pn,sourceLanguage:item.language})
+    });
+    clearTimeout(timer);
+    if (!response.ok) {
+      let msg=`Translation failed (HTTP ${response.status})`;
+      try { const body=await response.json(); if (body.detail) msg=body.detail; } catch {}
+      throw new Error(msg);
+    }
+    const blob=await response.blob();
+    if (!blob.type.includes("pdf")) throw new Error("Relay returned a non-PDF response.");
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=item.output; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+    item.status="Downloaded"; status.className="ok"; status.textContent="Translated PDF downloaded";
+  } catch(err) {
+    let msg=err.message;
+    if (err.name === "AbortError") msg="Translation request timed out after 7 minutes.";
+    else if (err.name === "TypeError") msg="Failed to fetch the translation service. Click Test Connection; if that also fails, the relay URL is unreachable or CORS/deployment is not configured.";
+    item.status="Error"; status.className="error"; status.textContent=msg; button.disabled=false;
+  } finally {
+    button.textContent=oldText;
+  }
+}
+
+
+document.getElementById("translationApiBase").value = localStorage.getItem("patentExaminerTranslationApi") || "";
+document.getElementById("saveTranslationApiBtn").addEventListener("click",saveTranslationApiBase);
+document.getElementById("testTranslationApiBtn").addEventListener("click",testTranslationApiBase);
+document.getElementById("translationSelectFolderBtn").addEventListener("click",selectTranslationFolder);
+document.getElementById("translationRefreshBtn").addEventListener("click",scanTranslationFolder);
 
 // Random 12-character code generator (adapted from uploaded HTML)
 const CODE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
