@@ -267,6 +267,58 @@ body {
     </div>
   </section>
 
+  <section id="documentRenamer" class="tool">
+    <div class="panel">
+        <h2 class="renamer-title">Application Document Renamer</h2>
+
+        <div class="note">
+            Example:
+            <code class="inline">
+                20260202_1703P160DIV1 Abstract.pdf
+            </code>
+            →
+            <code class="inline">
+                Abstract_1703P160DIV1_20260202.pdf
+            </code>
+            <br>
+            Files are processed locally in your browser.
+        </div>
+
+        <div class="row">
+            <button
+                class="action primary"
+                id="selectDocumentFolderBtn"
+                type="button">
+                Select Folder
+            </button>
+
+            <button
+                class="action"
+                id="renameDocumentButton"
+                type="button"
+                disabled>
+                Rename Files
+            </button>
+        </div>
+
+        <div id="documentRenameStatus" class="status"></div>
+
+        <div class="table-wrap">
+            <table id="documentPreviewTable">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Current Filename</th>
+                        <th>New Filename</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+  </section>
+
   <div class="footer">GitHub Pages-ready static app. Requires a browser with folder access support for the renamer.</div>
 </div>
 
