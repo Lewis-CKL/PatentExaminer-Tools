@@ -218,7 +218,7 @@ body {
 <body>
 <div class="app">
   <div class="header">
-    <h1>Patent Examiner Tools</h1>
+    <h1>Patent Examiner Tools V2.2</h1>
     <p>Browser-based utilities for prior-art organisation, application-document housekeeping, and examiner workflows.</p>
   </div>
 
@@ -256,11 +256,7 @@ body {
       <h2 class="renamer-title">Application Document Renamer</h2>
       <div class="note">
         For any supported file beginning with an 8-digit date, the date is moved to the end. The document name is placed first, followed by any recognised additional text/code.<br>
-        Examples: <code class="inline">20260202_1703P160DIV1 Abstract.pdf</code> → <code class="inline">Abstract_1703P160DIV1_20260202.pdf</code><br>
-        <code class="inline">20260202_1703P160SGDIV1_EN_Allowed JP Claims.pdf.unp</code> → <code class="inline">Allowed JP Claims_EN_1703P160SGDIV1_20260202.pdf.unp</code><br>
-        <code class="inline">20260202_PF8_FormDetails.pdf.unp</code> → <code class="inline">PF8_FormDetails_20260202.pdf.unp</code><br>
-        PF... and PT... names remain together as the document name. If no recognised structure is found, everything after the leading date is preserved and the date is simply appended at the end.<br>
-        Accepts both <code class="inline">.pdf</code> and <code class="inline">.pdf.unp</code> files and preserves the original extension when renaming. Files are processed locally in your browser.
+        Files are processed locally in your browser.</br>
       </div>
       <div class="row">
         <button class="action primary" id="applicationSelectFolderBtn" type="button">Select Folder</button>
